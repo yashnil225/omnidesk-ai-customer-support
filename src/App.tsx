@@ -9,33 +9,129 @@ import { InboxView } from './components/InboxView';
 import { EmbedCodeModal } from './components/EmbedCodeModal';
 import { DemoWebsitePreview } from './components/DemoWebsitePreview';
 import { AuthModal } from './components/AuthModal';
-import { 
-  INITIAL_DEMO_CHATBOT, 
-  INITIAL_DEMO_CONVERSATIONS, 
-  INITIAL_DEMO_MESSAGES 
-} from './lib/mockData';
 import { ChatbotConfig, Conversation, Message, TenantUser } from './types';
-import { saveChatbot } from './lib/supabase';
+import { supabase, saveChatbot, getTenantChatbots, getConversations, getMessages, saveMessage, updateConversationStatus } from './lib/supabase';
 
 export default function App() {
-  // Default tenant user for instant interactive preview
-  const [user, setUser] = useState<TenantUser | null>({
-    uid: 'demo_tenant_1',
-    email: 'alex@omnidesk.ai',
-    companyName: 'Acme SaaS Corp',
-    createdAt: new Date().toISOString(),
-    plan: 'pro',
-  });
-
   // State
-  const [chatbots, setChatbots] = useState<ChatbotConfig[]>([INITIAL_DEMO_CHATBOT]);
-  const [selectedChatbot, setSelectedChatbot] = useState<ChatbotConfig | null>(INITIAL_DEMO_CHATBOT);
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_DEMO_CONVERSATIONS);
-  const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>(INITIAL_DEMO_MESSAGES);
+  const [user, setUser] = useState<TenantUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const [chatbots, setChatbots] = useState<ChatbotConfig[]>([]);
+  const [selectedChatbot, setSelectedChatbot] = useState<ChatbotConfig | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>({});
 
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
   const [showEmbedModal, setShowEmbedModal] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Real authentication & Data Fetching
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          uid: session.user.id,
+          email: session.user.email || '',
+          companyName: session.user.user_metadata?.company_name || 'My Business',
+          createdAt: session.user.created_at,
+          plan: 'pro'
+        });
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          uid: session.user.id,
+          email: session.user.email || '',
+          companyName: session.user.user_metadata?.company_name || 'My Business',
+          createdAt: session.user.created_at,
+          plan: 'pro'
+        });
+      } else {
+        setUser(null);
+        setChatbots([]);
+        setConversations([]);
+        setMessagesMap({});
+        setSelectedChatbot(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadTenantData(user.uid);
+    }
+  }, [user]);
+
+  // Realtime Subscription
+  useEffect(() => {
+    if (!user) return;
+    
+    const channel = supabase
+      .channel('realtime_messages')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `tenant_id=eq.${user.uid}` },
+        (payload) => {
+          const newMsg = payload.new as any;
+          const mappedMsg: Message = {
+            id: newMsg.id,
+            conversationId: newMsg.conversation_id,
+            chatbotId: newMsg.chatbot_id,
+            tenantId: newMsg.tenant_id,
+            sender: newMsg.sender,
+            text: newMsg.text,
+            createdAt: newMsg.created_at,
+          };
+          
+          setMessagesMap((prev) => {
+            const currentMsgs = prev[mappedMsg.conversationId] || [];
+            if (currentMsgs.some((m) => m.id === mappedMsg.id)) return prev;
+            return { ...prev, [mappedMsg.conversationId]: [...currentMsgs, mappedMsg] };
+          });
+          
+          if (mappedMsg.sender === 'user') {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === mappedMsg.conversationId
+                  ? { ...c, lastMessageText: mappedMsg.text, lastMessageAt: mappedMsg.createdAt, status: 'open', unreadForTenant: true }
+                  : c
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  const loadTenantData = async (tenantId: string) => {
+    const bots = await getTenantChatbots(tenantId);
+    setChatbots(bots);
+    if (bots.length > 0 && !selectedChatbot) {
+      setSelectedChatbot(bots[0]);
+    }
+    
+    const convs = await getConversations(tenantId);
+    setConversations(convs);
+
+    // Fetch messages for all conversations
+    const msgsMap: Record<string, Message[]> = {};
+    for (const c of convs) {
+      const msgs = await getMessages(c.id);
+      msgsMap[c.id] = msgs;
+    }
+    setMessagesMap(msgsMap);
+  };
 
   // Sync selected chatbot changes back to server & list
   const handleUpdateChatbot = (updatedBot: ChatbotConfig) => {
@@ -79,15 +175,17 @@ export default function App() {
   };
 
   // Inbox Agent Reply
-  const handleSendAgentReply = (conversationId: string, text: string) => {
+  const handleSendAgentReply = async (conversationId: string, text: string) => {
+    if (!user) return;
+    const now = new Date().toISOString();
     const agentMsg: Message = {
       id: 'msg_agent_' + Date.now(),
       conversationId,
-      chatbotId: selectedChatbot?.id || 'bot_demo_101',
-      tenantId: user?.uid || 'demo_tenant_1',
+      chatbotId: selectedChatbot?.id || '',
+      tenantId: user.uid,
       sender: 'agent',
       text,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
     };
 
     setMessagesMap((prev) => ({
@@ -101,21 +199,41 @@ export default function App() {
           ? {
               ...c,
               lastMessageText: text,
-              lastMessageAt: new Date().toISOString(),
+              lastMessageAt: now,
               status: 'open',
             }
           : c
       )
     );
+
+    // Save to Supabase
+    await saveMessage(agentMsg);
+    await updateConversationStatus(conversationId, { status: 'open', lastMessageText: text, lastMessageAt: now });
   };
 
-  const handleUpdateConvStatus = (conversationId: string, status: 'open' | 'resolved' | 'transferred') => {
+  const handleUpdateConvStatus = async (conversationId: string, status: 'open' | 'resolved' | 'transferred') => {
     setConversations((prev) =>
       prev.map((c) => (c.id === conversationId ? { ...c, status } : c))
     );
+    await updateConversationStatus(conversationId, { status });
   };
 
   const unreadConversationsCount = conversations.filter((c) => c.unreadForTenant).length;
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white font-mono">Loading OmniDesk...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-zinc-300 font-sans relative">
+        <AuthModal
+          onClose={() => {}}
+          onSuccess={(u) => setUser(u)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-zinc-300 font-sans flex flex-col">
@@ -127,7 +245,7 @@ export default function App() {
         onSelectChatbot={(bot) => setSelectedChatbot(bot)}
         onCreateChatbot={() => handleCreateChatbot({ name: 'New AI Assistant' })}
         onOpenEmbedModal={() => setShowEmbedModal(true)}
-        onOpenAuth={() => setShowAuthModal(true)}
+        onOpenAuth={() => {}}
         onSignOut={() => setUser(null)}
       />
 
@@ -219,16 +337,7 @@ export default function App() {
         />
       )}
 
-      {/* Auth Modal */}
-      {showAuthModal && (
-        <AuthModal
-          onClose={() => setShowAuthModal(false)}
-          onSuccess={(u) => {
-            setUser(u);
-            setShowAuthModal(false);
-          }}
-        />
-      )}
+      {/* Auth Modal handled at root */}
     </div>
   );
 }

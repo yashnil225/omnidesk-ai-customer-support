@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { INITIAL_DEMO_CHATBOT } from './src/lib/mockData';
+
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
@@ -439,7 +439,7 @@ app.get('/api/chatbot/:id', async (req, res) => {
   const chatbotId = req.params.id;
   const { data: bot, error } = await supabase.from('chatbots').select('*').eq('id', chatbotId).single();
   if (error || !bot) {
-    return res.json({ chatbot: INITIAL_DEMO_CHATBOT });
+    return res.status(404).json({ error: 'Chatbot not found' });
   }
 
   const mappedBot = {
@@ -466,25 +466,27 @@ app.get('/api/chatbot/:id', async (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     const { chatbotId, conversationId, visitorId, messages } = req.body;
-    let bot = INITIAL_DEMO_CHATBOT;
-    const { data: dbBot } = await supabase.from('chatbots').select('*').eq('id', chatbotId).single();
-    if (dbBot) {
-       bot = {
-         id: dbBot.id,
-         tenantId: dbBot.tenant_id,
-         name: dbBot.name,
-         welcomeMessage: dbBot.welcome_message,
-         primaryColor: dbBot.primary_color,
-         position: dbBot.position,
-         avatarUrl: dbBot.avatar_url,
-         suggestedPrompts: dbBot.suggested_prompts || [],
-         customSystemPrompt: dbBot.custom_system_prompt || '',
-         collectUserEmail: dbBot.collect_user_email ?? true,
-         kbUrls: dbBot.kb_urls || [],
-         kbFaqs: dbBot.kb_faqs || [],
-         kbDocs: dbBot.kb_docs || [],
-       };
+    const { data: dbBot, error: dbError } = await supabase.from('chatbots').select('*').eq('id', chatbotId).single();
+    
+    if (dbError || !dbBot) {
+      return res.status(404).json({ success: false, error: 'Chatbot not found' });
     }
+
+    const bot = {
+      id: dbBot.id,
+      tenantId: dbBot.tenant_id,
+      name: dbBot.name,
+      welcomeMessage: dbBot.welcome_message,
+      primaryColor: dbBot.primary_color,
+      position: dbBot.position,
+      avatarUrl: dbBot.avatar_url,
+      suggestedPrompts: dbBot.suggested_prompts || [],
+      customSystemPrompt: dbBot.custom_system_prompt || '',
+      collectUserEmail: dbBot.collect_user_email ?? true,
+      kbUrls: dbBot.kb_urls || [],
+      kbFaqs: dbBot.kb_faqs || [],
+      kbDocs: dbBot.kb_docs || [],
+    };
 
     // Build rich context from Chatbot Knowledge Base
     let kbContextText = '';

@@ -303,3 +303,38 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
     return [];
   }
 }
+
+export async function saveMessage(message: Message): Promise<void> {
+  try {
+    const payload = {
+      id: message.id,
+      conversation_id: message.conversationId,
+      chatbot_id: message.chatbotId,
+      tenant_id: message.tenantId,
+      sender: message.sender,
+      text: message.text,
+      created_at: message.createdAt,
+    };
+    const { error } = await supabase.from('messages').insert(payload);
+    if (error) console.warn('Supabase saveMessage error:', error);
+  } catch (err) {
+    console.warn('Could not save message:', err);
+  }
+}
+
+export async function updateConversationStatus(
+  conversationId: string,
+  updates: { status?: 'open' | 'resolved' | 'transferred'; lastMessageText?: string; lastMessageAt?: string }
+): Promise<void> {
+  try {
+    const payload: any = {};
+    if (updates.status) payload.status = updates.status;
+    if (updates.lastMessageText) payload.last_message_text = updates.lastMessageText;
+    if (updates.lastMessageAt) payload.last_message_at = updates.lastMessageAt;
+
+    const { error } = await supabase.from('conversations').update(payload).eq('id', conversationId);
+    if (error) console.warn('Supabase updateConversation error:', error);
+  } catch (err) {
+    console.warn('Could not update conversation:', err);
+  }
+}
