@@ -1,0 +1,6 @@
+{
+  "name": "OmniDesk AI Customer Support",
+  "description": "Multi-tenant AI Customer Support SaaS platform with custom trained chatbots, knowledge base training, live testing, dashboard management, and customizable embeddable chat widgets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

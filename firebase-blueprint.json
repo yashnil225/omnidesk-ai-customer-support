@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "Tenant business accounts",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "companyName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "chatbots": {
+      "title": "Chatbot",
+      "description": "AI Support Chatbot configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "name": { "type": "string" },
+        "welcomeMessage": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "position": { "type": "string" },
+        "customSystemPrompt": { "type": "string" },
+        "kbUrls": { "type": "array", "items": { "type": "string" } },
+        "kbFaqs": { "type": "array", "items": { "type": "object" } },
+        "kbDocs": { "type": "array", "items": { "type": "object" } },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "tenantId", "name"]
+    },
+    "conversations": {
+      "title": "Conversation",
+      "description": "Chat conversations with end customers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "chatbotId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "visitorId": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerName": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastMessageAt": { "type": "string" },
+        "lastMessageText": { "type": "string" }
+      },
+      "required": ["id", "chatbotId", "tenantId"]
+    },
+    "messages": {
+      "title": "Message",
+      "description": "Individual chat messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "chatbotId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "sender": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "conversationId", "text", "sender"]
+    }
+  }
+}
