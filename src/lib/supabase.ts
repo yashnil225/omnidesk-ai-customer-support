@@ -26,7 +26,7 @@ export async function fetchUserProfile(sessionUser: any): Promise<TenantUser> {
       return {
         uid: profile.id,
         email: profile.email || sessionUser.email || '',
-        companyName: profile.company_name || sessionUser.user_metadata?.company_name || 'My Business',
+        companyName: profile.company_name || sessionUser.user_metadata?.company_name || sessionUser.raw_user_meta_data?.company_name || 'My Business',
         createdAt: profile.created_at || sessionUser.created_at,
         plan: profile.plan || 'pro',
       };
@@ -36,7 +36,7 @@ export async function fetchUserProfile(sessionUser: any): Promise<TenantUser> {
   return {
     uid: userId,
     email: sessionUser.email || '',
-    companyName: sessionUser.user_metadata?.company_name || 'My Business',
+    companyName: sessionUser.user_metadata?.company_name || sessionUser.raw_user_meta_data?.company_name || localStorage.getItem('mock_company_name') || 'My Business',
     createdAt: sessionUser.created_at,
     plan: 'pro',
   };
@@ -66,6 +66,11 @@ export async function signUpTenant(email: string, pass: string, companyName: str
       createdAt: new Date().toISOString(),
       plan: 'pro',
     };
+
+    // Save for mock fallback
+    if (companyName) {
+      localStorage.setItem('mock_company_name', companyName);
+    }
 
     // Try storing in 'users' or 'profiles' table in Supabase
     try {
@@ -118,7 +123,7 @@ export async function signInTenant(email: string, pass: string): Promise<TenantU
         return {
           uid: profile.id,
           email: profile.email || email,
-          companyName: profile.company_name || 'My Business',
+          companyName: profile.company_name || data.user?.user_metadata?.company_name || data.user?.raw_user_meta_data?.company_name || localStorage.getItem('mock_company_name') || 'My Business',
           createdAt: profile.created_at || new Date().toISOString(),
           plan: profile.plan || 'pro',
         };
@@ -128,7 +133,7 @@ export async function signInTenant(email: string, pass: string): Promise<TenantU
     return {
       uid: userId,
       email: data.user?.email || email,
-      companyName: data.user?.user_metadata?.company_name || 'My Business',
+      companyName: data.user?.user_metadata?.company_name || data.user?.raw_user_meta_data?.company_name || localStorage.getItem('mock_company_name') || 'My Business',
       createdAt: new Date().toISOString(),
       plan: 'pro',
     };
@@ -136,7 +141,7 @@ export async function signInTenant(email: string, pass: string): Promise<TenantU
     return {
       uid: 'usr_demo_1',
       email,
-      companyName: 'Acme SaaS Corp',
+      companyName: localStorage.getItem('mock_company_name') || 'Acme SaaS Corp',
       createdAt: new Date().toISOString(),
       plan: 'pro',
     };

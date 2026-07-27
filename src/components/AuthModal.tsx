@@ -49,16 +49,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
     }
   };
 
-  const handleDemoAccount = () => {
-    const demoUser: TenantUser = {
-      uid: 'demo_tenant_1',
-      email: 'demo@omnidesk.ai',
-      companyName: 'Acme SaaS Corp',
-      createdAt: new Date().toISOString(),
-      plan: 'pro',
-    };
-    onSuccess(demoUser);
-  };
+
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
@@ -164,15 +155,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
             className="w-full border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2"
           >
             <span>Continue with Google Account</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDemoAccount}
-            className="w-full bg-emerald-950/80 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-800/60 font-semibold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Instant Demo Mode Login</span>
           </button>
         </div>
 
