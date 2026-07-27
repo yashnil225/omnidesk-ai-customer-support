@@ -59,17 +59,35 @@ app.get('/widget.js', (req, res) => {
     document.addEventListener('DOMContentLoaded', mountContainer);
   }
 
+  var defaultConfig = {
+    id: chatbotId,
+    name: 'Healthy You AI Assistant',
+    welcomeMessage: 'Hello! Welcome to Healthy You! How can I help you today?',
+    primaryColor: '#15b7cb',
+    position: 'bottom-right',
+    avatarUrl: '',
+    suggestedPrompts: ['Shipping Policy', 'Track My Order', 'Product Recommendations'],
+    collectUserEmail: true
+  };
+
   // Fetch Chatbot configuration
   fetch(serverUrl + '/api/chatbot/' + chatbotId)
-    .then(function(res) { return res.json(); })
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP error ' + res.status);
+      return res.json();
+    })
     .then(function(data) {
       if (data && data.chatbot) {
         state.config = data.chatbot;
-        initWidget();
+      } else {
+        state.config = defaultConfig;
       }
+      initWidget();
     })
     .catch(function(err) {
-      console.warn('[OmniDesk] Could not fetch chatbot config:', err);
+      console.warn('[OmniDesk] Could not fetch chatbot config, using default fallback:', err);
+      state.config = defaultConfig;
+      initWidget();
     });
 
   function initWidget() {
