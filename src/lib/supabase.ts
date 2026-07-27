@@ -13,6 +13,35 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // Auth functions
+export async function fetchUserProfile(sessionUser: any): Promise<TenantUser> {
+  const userId = sessionUser.id;
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (profile) {
+      return {
+        uid: profile.id,
+        email: profile.email || sessionUser.email || '',
+        companyName: profile.company_name || sessionUser.user_metadata?.company_name || 'My Business',
+        createdAt: profile.created_at || sessionUser.created_at,
+        plan: profile.plan || 'pro',
+      };
+    }
+  } catch (err) {}
+  
+  return {
+    uid: userId,
+    email: sessionUser.email || '',
+    companyName: sessionUser.user_metadata?.company_name || 'My Business',
+    createdAt: sessionUser.created_at,
+    plan: 'pro',
+  };
+}
+
 export async function signUpTenant(email: string, pass: string, companyName: string): Promise<TenantUser> {
   try {
     const { data, error } = await supabase.auth.signUp({
@@ -250,6 +279,17 @@ export async function getChatbotById(chatbotId: string): Promise<ChatbotConfig |
 }
 
 // Conversation CRUD
+export async function deleteChatbot(chatbotId: string): Promise<void> {
+  try {
+    const { error } = await supabase.from('chatbots').delete().eq('id', chatbotId);
+    if (error) {
+      console.warn('Supabase deleteChatbot note:', error.message);
+    }
+  } catch (err) {
+    console.warn('Could not delete chatbot from Supabase table:', err);
+  }
+}
+
 export async function getConversations(tenantId: string): Promise<Conversation[]> {
   try {
     const { data, error } = await supabase

@@ -19,6 +19,7 @@ interface ChatbotListProps {
   selectedChatbot: ChatbotConfig | null;
   onSelectChatbot: (bot: ChatbotConfig) => void;
   onCreateChatbot: (newBot: Partial<ChatbotConfig>) => void;
+  onDeleteChatbot?: (chatbotId: string) => void;
   onNavigateTab: (tab: any) => void;
   onOpenEmbedModal: (bot?: ChatbotConfig) => void;
 }
@@ -28,6 +29,7 @@ export const ChatbotList: React.FC<ChatbotListProps> = ({
   selectedChatbot,
   onSelectChatbot,
   onCreateChatbot,
+  onDeleteChatbot,
   onNavigateTab,
   onOpenEmbedModal,
 }) => {
@@ -124,6 +126,18 @@ export const ChatbotList: React.FC<ChatbotListProps> = ({
                     <span className="bg-emerald-950/80 text-emerald-400 text-[10px] font-mono font-semibold uppercase tracking-wider px-2.5 py-1 rounded border border-emerald-800/60">
                       Active
                     </span>
+                  )}
+                  {onDeleteChatbot && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteChatbot(bot.id);
+                      }}
+                      className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-950/50 rounded-lg transition"
+                      title="Delete Chatbot"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   )}
                 </div>
 

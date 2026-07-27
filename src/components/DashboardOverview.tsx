@@ -31,10 +31,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onNavigateTab,
   onOpenEmbedModal,
 }) => {
-  const totalChats = conversations.length || 18;
-  const resolvedChats = conversations.filter(c => c.status === 'resolved').length;
-  const resolutionRate = totalChats > 0 ? Math.round((resolvedChats / totalChats) * 100) || 94 : 94;
-  const leadsCount = conversations.filter(c => c.customerEmail).length || 6;
+  const botConversations = selectedChatbot 
+    ? conversations.filter(c => c.chatbotId === selectedChatbot.id)
+    : conversations;
+    
+  const totalChats = botConversations.length;
+  const resolvedChats = botConversations.filter(c => c.status === 'resolved').length;
+  const resolutionRate = totalChats > 0 ? Math.round((resolvedChats / totalChats) * 100) : 0;
+  const leadsCount = botConversations.filter(c => c.customerEmail).length;
 
   return (
     <div className="space-y-8">
@@ -264,7 +268,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
-                {conversations.slice(0, 5).map((conv) => (
+                {botConversations.slice(0, 5).map((conv) => (
                   <tr key={conv.id} className="hover:bg-zinc-900/60 transition cursor-pointer" onClick={() => onNavigateTab('inbox')}>
                     <td className="py-3 pr-2">
                       <div className="font-semibold text-white">{conv.customerName || 'Anonymous Visitor'}</div>

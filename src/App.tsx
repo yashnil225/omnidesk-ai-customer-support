@@ -10,7 +10,7 @@ import { EmbedCodeModal } from './components/EmbedCodeModal';
 import { DemoWebsitePreview } from './components/DemoWebsitePreview';
 import { AuthModal } from './components/AuthModal';
 import { ChatbotConfig, Conversation, Message, TenantUser } from './types';
-import { supabase, saveChatbot, getTenantChatbots, getConversations, getMessages, saveMessage, updateConversationStatus } from './lib/supabase';
+import { supabase, saveChatbot, getTenantChatbots, getConversations, getMessages, saveMessage, updateConversationStatus, fetchUserProfile, deleteChatbot } from './lib/supabase';
 
 export default function App() {
   // State
@@ -27,30 +27,20 @@ export default function App() {
 
   // Real authentication & Data Fetching
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        setUser({
-          uid: session.user.id,
-          email: session.user.email || '',
-          companyName: session.user.user_metadata?.company_name || 'My Business',
-          createdAt: session.user.created_at,
-          plan: 'pro'
-        });
+        const profileUser = await fetchUserProfile(session.user);
+        setUser(profileUser);
       } else {
         setUser(null);
       }
       setIsLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        setUser({
-          uid: session.user.id,
-          email: session.user.email || '',
-          companyName: session.user.user_metadata?.company_name || 'My Business',
-          createdAt: session.user.created_at,
-          plan: 'pro'
-        });
+        const profileUser = await fetchUserProfile(session.user);
+        setUser(profileUser);
       } else {
         setUser(null);
         setChatbots([]);
@@ -174,6 +164,16 @@ export default function App() {
     setActiveTab('knowledge');
   };
 
+  const handleDeleteChatbot = async (chatbotId: string) => {
+    if (window.confirm("Are you sure you want to delete this chatbot? This is not recoverable.")) {
+      setChatbots((prev) => prev.filter((b) => b.id !== chatbotId));
+      if (selectedChatbot?.id === chatbotId) {
+        setSelectedChatbot(null);
+      }
+      await deleteChatbot(chatbotId);
+    }
+  };
+
   // Inbox Agent Reply
   const handleSendAgentReply = async (conversationId: string, text: string) => {
     if (!user) return;
@@ -277,6 +277,7 @@ export default function App() {
               selectedChatbot={selectedChatbot}
               onSelectChatbot={(bot) => setSelectedChatbot(bot)}
               onCreateChatbot={(data) => handleCreateChatbot(data)}
+              onDeleteChatbot={handleDeleteChatbot}
               onNavigateTab={(tab) => setActiveTab(tab)}
               onOpenEmbedModal={() => setShowEmbedModal(true)}
             />
