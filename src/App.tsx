@@ -10,12 +10,26 @@ import { EmbedCodeModal } from './components/EmbedCodeModal';
 import { DemoWebsitePreview } from './components/DemoWebsitePreview';
 import { AuthModal } from './components/AuthModal';
 import { ChatbotConfig, Conversation, Message, TenantUser } from './types';
-import { supabase, saveChatbot, getTenantChatbots, getConversations, getMessages, saveMessage, updateConversationStatus, fetchUserProfile, deleteChatbot } from './lib/supabase';
+import {
+  supabase,
+  saveChatbot,
+  getTenantChatbots,
+  getConversations,
+  getMessages,
+  saveMessage,
+  updateConversationStatus,
+  fetchUserProfile,
+  deleteChatbot,
+  getPersistentSession,
+  savePersistentSession,
+  clearPersistentSession,
+  signOutUser,
+} from './lib/supabase';
 
 export default function App() {
-  // State
-  const [user, setUser] = useState<TenantUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // State with persistent session initialization
+  const [user, setUser] = useState<TenantUser | null>(() => getPersistentSession());
+  const [isLoading, setIsLoading] = useState(!getPersistentSession());
   
   const [chatbots, setChatbots] = useState<ChatbotConfig[]>([]);
   const [selectedChatbot, setSelectedChatbot] = useState<ChatbotConfig | null>(null);
@@ -25,28 +39,36 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
   const [showEmbedModal, setShowEmbedModal] = useState(false);
 
-  // Real authentication & Data Fetching
+  // Real authentication & Persistent Data Fetching
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const profileUser = await fetchUserProfile(session.user);
         setUser(profileUser);
+        savePersistentSession(profileUser);
       } else {
-        setUser(null);
+        const savedUser = getPersistentSession();
+        if (savedUser) {
+          setUser(savedUser);
+        } else {
+          setUser(null);
+        }
       }
       setIsLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const profileUser = await fetchUserProfile(session.user);
-        setUser(profileUser);
-      } else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        clearPersistentSession();
         setUser(null);
         setChatbots([]);
         setConversations([]);
         setMessagesMap({});
         setSelectedChatbot(null);
+      } else if (session?.user) {
+        const profileUser = await fetchUserProfile(session.user);
+        setUser(profileUser);
+        savePersistentSession(profileUser);
       }
     });
 
@@ -218,6 +240,16 @@ export default function App() {
     await updateConversationStatus(conversationId, { status });
   };
 
+  const handleSignOut = async () => {
+    clearPersistentSession();
+    setUser(null);
+    setChatbots([]);
+    setConversations([]);
+    setMessagesMap({});
+    setSelectedChatbot(null);
+    await signOutUser();
+  };
+
   const unreadConversationsCount = conversations.filter((c) => c.unreadForTenant).length;
 
   if (isLoading) {
@@ -229,7 +261,10 @@ export default function App() {
       <div className="min-h-screen bg-[#0a0a0a] text-zinc-300 font-sans relative">
         <AuthModal
           onClose={() => {}}
-          onSuccess={(u) => setUser(u)}
+          onSuccess={(u) => {
+            savePersistentSession(u);
+            setUser(u);
+          }}
         />
       </div>
     );
@@ -246,7 +281,7 @@ export default function App() {
         onCreateChatbot={() => handleCreateChatbot({ name: 'New AI Assistant' })}
         onOpenEmbedModal={() => setShowEmbedModal(true)}
         onOpenAuth={() => {}}
-        onSignOut={() => setUser(null)}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Workspace Layout */}

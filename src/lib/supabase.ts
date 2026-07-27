@@ -12,9 +12,37 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+// Persistent Local Session Helpers
+export function savePersistentSession(user: TenantUser) {
+  try {
+    localStorage.setItem('omnidesk_tenant_user', JSON.stringify(user));
+  } catch (err) {
+    console.warn('Could not save persistent session:', err);
+  }
+}
+
+export function getPersistentSession(): TenantUser | null {
+  try {
+    const data = localStorage.getItem('omnidesk_tenant_user');
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.warn('Could not parse persistent session:', err);
+  }
+  return null;
+}
+
+export function clearPersistentSession() {
+  try {
+    localStorage.removeItem('omnidesk_tenant_user');
+  } catch (err) {}
+}
+
 // Auth functions
 export async function fetchUserProfile(sessionUser: any): Promise<TenantUser> {
   const userId = sessionUser.id;
+  let tenant: TenantUser;
   try {
     const { data: profile } = await supabase
       .from('profiles')
@@ -23,23 +51,27 @@ export async function fetchUserProfile(sessionUser: any): Promise<TenantUser> {
       .single();
 
     if (profile) {
-      return {
+      tenant = {
         uid: profile.id,
         email: profile.email || sessionUser.email || '',
         companyName: profile.company_name || sessionUser.user_metadata?.company_name || sessionUser.raw_user_meta_data?.company_name || 'My Business',
         createdAt: profile.created_at || sessionUser.created_at,
         plan: profile.plan || 'pro',
       };
+      savePersistentSession(tenant);
+      return tenant;
     }
   } catch (err) {}
   
-  return {
+  tenant = {
     uid: userId,
     email: sessionUser.email || '',
     companyName: sessionUser.user_metadata?.company_name || sessionUser.raw_user_meta_data?.company_name || localStorage.getItem('mock_company_name') || 'My Business',
     createdAt: sessionUser.created_at,
     plan: 'pro',
   };
+  savePersistentSession(tenant);
+  return tenant;
 }
 
 export async function signUpTenant(email: string, pass: string, companyName: string): Promise<TenantUser> {
@@ -54,6 +86,21 @@ export async function signUpTenant(email: string, pass: string, companyName: str
   });
 
   if (error) {
+    // If email rate limit was hit, check if user account was already created and try signing in
+    if (error.message.toLowerCase().includes('rate limit')) {
+      try {
+        const existingTenant = await signInTenant(email, pass);
+        if (existingTenant) {
+          savePersistentSession(existingTenant);
+          return existingTenant;
+        }
+      } catch (_) {
+        // Sign-in failed (e.g. wrong password or user not created yet)
+      }
+      throw new Error(
+        'Supabase email rate limit exceeded (3 emails/hr limit). If your account was already created, try signing in instead. To disable rate limits in Supabase Dashboard: go to Auth > Providers > Email and disable "Confirm email" or set up custom SMTP.'
+      );
+    }
     throw new Error(error.message);
   }
 
@@ -83,6 +130,7 @@ export async function signUpTenant(email: string, pass: string, companyName: str
     console.warn('Supabase DB profiles table sync note:', dbErr);
   }
 
+  savePersistentSession(tenant);
   return tenant;
 }
 
@@ -101,6 +149,7 @@ export async function signInTenant(email: string, pass: string): Promise<TenantU
   }
 
   const userId = data.user.id;
+  let tenant: TenantUser;
     
   // Try fetching user profile from Supabase table
   try {
@@ -111,23 +160,27 @@ export async function signInTenant(email: string, pass: string): Promise<TenantU
       .single();
 
     if (profile) {
-      return {
+      tenant = {
         uid: profile.id,
         email: profile.email || email,
         companyName: profile.company_name || data.user.user_metadata?.company_name || 'My Business',
         createdAt: profile.created_at || new Date().toISOString(),
         plan: profile.plan || 'pro',
       };
+      savePersistentSession(tenant);
+      return tenant;
     }
   } catch (_) {}
 
-  return {
+  tenant = {
     uid: userId,
     email: data.user.email || email,
     companyName: data.user.user_metadata?.company_name || 'My Business',
     createdAt: new Date().toISOString(),
     plan: 'pro',
   };
+  savePersistentSession(tenant);
+  return tenant;
 }
 
 export async function signInWithGoogle(): Promise<TenantUser> {
@@ -146,26 +199,31 @@ export async function signInWithGoogle(): Promise<TenantUser> {
     const { data } = await supabase.auth.getUser();
     const user = data.user;
 
-    return {
+    const tenant: TenantUser = {
       uid: user?.id || 'usr_google_' + Date.now(),
       email: user?.email || 'google_user@example.com',
       companyName: user?.user_metadata?.full_name ? `${user.user_metadata.full_name}'s Company` : 'Google SaaS Workspace',
       createdAt: new Date().toISOString(),
       plan: 'pro',
     };
+    savePersistentSession(tenant);
+    return tenant;
   } catch (err: any) {
-    return {
+    const tenant: TenantUser = {
       uid: 'usr_google_' + Date.now(),
       email: 'user@gmail.com',
       companyName: 'Google Business Account',
       createdAt: new Date().toISOString(),
       plan: 'pro',
     };
+    savePersistentSession(tenant);
+    return tenant;
   }
 }
 
 export async function signOutUser() {
   try {
+    clearPersistentSession();
     await supabase.auth.signOut();
   } catch (err) {
     console.warn('Supabase signout warning:', err);

@@ -75,8 +75,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
         </div>
 
         {error && (
-          <div className="p-3 bg-red-950/50 border border-red-900/60 text-red-400 rounded-xl text-xs">
-            {error}
+          <div className="p-3 bg-red-950/50 border border-red-900/60 text-red-400 rounded-xl text-xs space-y-2.5">
+            <div>{error}</div>
+            {isSignUp && error.toLowerCase().includes('rate limit') && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setError('');
+                  setLoading(true);
+                  try {
+                    const user = await signInTenant(email, password);
+                    onSuccess(user);
+                  } catch (err: any) {
+                    setError(err.message || 'Sign in failed. Please check your credentials.');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition flex items-center justify-center gap-1.5"
+              >
+                <span>Sign In With Existing Credentials</span>
+              </button>
+            )}
           </div>
         )}
 
