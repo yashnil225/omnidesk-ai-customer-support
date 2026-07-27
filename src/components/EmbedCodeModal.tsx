@@ -50,13 +50,45 @@ export default function App() {
       case 'wordpress':
         return `<!-- OmniDesk AI Chatbot for WordPress -->\n${embedScript}`;
       case 'shopify':
-        return `<!-- Paste inside layout/theme.liquid before </body> -->\n${embedScript}`;
+        return `<!-- OmniDesk AI Chatbot Widget for Shopify Stores -->\n${embedScript}`;
       case 'webflow':
         return `<!-- Paste in Webflow Site Settings > Custom Code > Footer -->\n${embedScript}`;
       case 'react':
         return reactSnippet;
       default:
         return embedScript;
+    }
+  };
+
+  const getPlatformInstructions = () => {
+    switch (activePlatform) {
+      case 'shopify':
+        return (
+          <div className="text-xs text-zinc-400 space-y-1.5 p-3.5 bg-zinc-950 rounded-xl border border-zinc-800">
+            <div className="font-semibold text-emerald-400 flex items-center gap-1.5">
+              <span>Shopify Store Quick Integration Steps:</span>
+            </div>
+            <ol className="list-decimal list-inside space-y-1 text-zinc-300">
+              <li>Log in to your <strong>Shopify Admin</strong> dashboard.</li>
+              <li>Navigate to <strong>Online Store</strong> &rarr; <strong>Themes</strong>.</li>
+              <li>Click the <strong>...</strong> (Actions) button next to your active theme and select <strong>Edit code</strong>.</li>
+              <li>Under the <strong>Layout</strong> folder on the left, click <code>theme.liquid</code>.</li>
+              <li>Scroll down to the bottom and paste this script directly above the <code>&lt;/body&gt;</code> tag.</li>
+              <li>Click <strong>Save</strong> at top right. Your chatbot widget is now live on your Shopify store!</li>
+            </ol>
+          </div>
+        );
+      case 'wordpress':
+        return (
+          <div className="text-xs text-zinc-400 space-y-1.5 p-3.5 bg-zinc-950 rounded-xl border border-zinc-800">
+            <div className="font-semibold text-emerald-400">WordPress Setup Steps:</div>
+            <p className="text-zinc-300">
+              Paste the code into your theme's <code>footer.php</code> file directly above <code>&lt;/body&gt;</code>, or install the free <em>"Insert Headers and Footers"</em> plugin and paste it into the Footer Scripts field.
+            </p>
+          </div>
+        );
+      default:
+        return null;
     }
   };
 
@@ -125,6 +157,8 @@ export default function App() {
           <pre className="p-4 rounded-2xl bg-black text-zinc-200 font-mono text-xs overflow-x-auto leading-relaxed border border-zinc-800">
             {getPlatformCode()}
           </pre>
+
+          {getPlatformInstructions()}
         </div>
 
         {/* Integration Instructions */}

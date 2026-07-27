@@ -300,7 +300,7 @@ app.get('/widget.js', (req, res) => {
           \${avatarImg}
           <div>
             <div class="omni-title">\${config.name}</div>
-            <div class="omni-subtitle">⚡ AI Support Online</div>
+            <div class="omni-subtitle">⚡ 24x7 Support Online</div>
           </div>
         </div>
         <button class="omni-close-btn" id="omni-close">✕</button>

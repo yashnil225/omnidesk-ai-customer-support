@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Globe, ArrowLeft, Send, Sparkles, Bot, Shield, CheckCircle } from 'lucide-react';
+import { Globe, ArrowLeft, Send, Sparkles, Bot, Shield, CheckCircle, RefreshCw } from 'lucide-react';
 import { ChatbotConfig } from '../types';
 
 interface DemoWebsitePreviewProps {
@@ -20,6 +20,17 @@ export const DemoWebsitePreview: React.FC<DemoWebsitePreviewProps> = ({ chatbot,
   const [previewUrl, setPreviewUrl] = useState('');
 
   const primaryColor = chatbot?.primaryColor || '#4F46E5';
+
+  const handleResetChat = () => {
+    setMessages([
+      {
+        sender: 'bot',
+        text: chatbot?.welcomeMessage || '👋 Hello! Welcome to Apex Cloud. How can I help you today?',
+      },
+    ]);
+    setInput('');
+    setIsTyping(false);
+  };
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = textToSend || input;
@@ -155,12 +166,21 @@ export const DemoWebsitePreview: React.FC<DemoWebsitePreviewProps> = ({ chatbot,
                   </div>
                   <div>
                     <div className="font-bold text-sm leading-tight">{chatbot?.name || 'Support Bot'}</div>
-                    <div className="text-[10px] text-white/80 font-mono">⚡ AI Support Online</div>
+                    <div className="text-[10px] text-white/80 font-mono">⚡ 24x7 Support Online</div>
                   </div>
                 </div>
-                <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white text-sm font-bold">
-                  ✕
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleResetChat}
+                    title="Reset Chat Thread"
+                    className="p-1 text-white/80 hover:text-white rounded-lg hover:bg-white/10 transition"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white text-sm font-bold p-1">
+                    ✕
+                  </button>
+                </div>
               </div>
 
               {/* Chat Thread */}

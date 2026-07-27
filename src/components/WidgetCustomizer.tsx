@@ -56,6 +56,8 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
   const [testInputText, setTestInputText] = useState('');
   const [isTestTyping, setIsTestTyping] = useState(false);
 
+  const [isSaved, setIsSaved] = useState(false);
+
   const colorPresets = ['#4F46E5', '#2563EB', '#0D9488', '#059669', '#7C3AED', '#DB2777', '#111827'];
 
   const handleSave = () => {
@@ -70,6 +72,8 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
       collectUserEmail: collectEmail,
     };
     onUpdateChatbot(updated);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
   };
 
   const handleAddPrompt = () => {
@@ -78,8 +82,8 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
     setNewPromptText('');
   };
 
-  const handleRemovePrompt = (index: number) => {
-    setPrompts(prompts.filter((_, i) => i !== index));
+  const handleRemovePrompt = (indexToRemove: number) => {
+    setPrompts((prev) => prev.filter((_, i) => i !== indexToRemove));
   };
 
   // Interactive Test Chat Handler
@@ -146,7 +150,7 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
   const handleResetTestChat = () => {
     setPreviewMessages([
       {
-        id: 'prev_1',
+        id: 'prev_' + Date.now(),
         conversationId: 'prev_conv',
         chatbotId: chatbot.id,
         tenantId: chatbot.tenantId,
@@ -155,19 +159,21 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
         createdAt: new Date().toISOString(),
       },
     ]);
+    setTestInputText('');
+    setIsTestTyping(false);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-[#0f0f0f] p-6 rounded-2xl border border-zinc-800 shadow-xs flex items-center justify-between">
+      {/* Header Banner - Fully Responsive */}
+      <div className="bg-[#0f0f0f] p-6 rounded-2xl border border-zinc-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-mono font-semibold uppercase tracking-widest mb-1">
             <Palette className="w-4 h-4" />
             Widget Appearance & Branding
           </div>
           <h1 className="text-xl font-bold text-white">
-            Customize Widget for <span className="text-emerald-400">{chatbot.name}</span>
+            Customize Widget for <span className="text-emerald-400">{name}</span>
           </h1>
           <p className="text-xs text-zinc-400 mt-0.5">
             Modify brand colors, position, greetings, and test the widget live in real-time.
@@ -175,11 +181,16 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={handleSave}
-          className="flex items-center gap-2 bg-zinc-100 hover:bg-white text-black font-semibold uppercase tracking-wider px-5 py-2.5 rounded-xl text-xs shadow-xs transition"
+          className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider shadow-xs transition whitespace-nowrap shrink-0 ${
+            isSaved
+              ? 'bg-emerald-600 text-white'
+              : 'bg-zinc-100 hover:bg-white text-black'
+          }`}
         >
-          <Save className="w-4 h-4" />
-          <span>Save Customizations</span>
+          {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+          <span>{isSaved ? 'Saved Customizations!' : 'Save Customizations'}</span>
         </button>
       </div>
 
@@ -236,13 +247,13 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
                   className="w-28 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 font-mono text-xs uppercase text-zinc-200"
                 />
 
-                <div className="flex items-center gap-1.5 ml-2">
+                <div className="flex items-center gap-1.5 ml-2 overflow-x-auto py-1">
                   {colorPresets.map((hex) => (
                     <button
                       key={hex}
                       type="button"
                       onClick={() => setPrimaryColor(hex)}
-                      className={`w-6 h-6 rounded-full border transition-transform ${
+                      className={`w-6 h-6 rounded-full border transition-transform shrink-0 ${
                         primaryColor.toLowerCase() === hex.toLowerCase() ? 'scale-125 ring-2 ring-emerald-400' : ''
                       }`}
                       style={{ backgroundColor: hex }}
@@ -253,7 +264,7 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
             </div>
 
             {/* Position & Avatar */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-mono font-semibold text-zinc-400 uppercase tracking-widest mb-1">
                   Widget Screen Position
@@ -290,13 +301,14 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
               <div className="space-y-2 mb-2">
                 {prompts.map((p, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2.5 bg-zinc-900 rounded-xl border border-zinc-800 text-xs text-zinc-300">
-                    <span>{p}</span>
+                    <span className="truncate pr-2">{p}</span>
                     <button
                       type="button"
-                      onClick={() => handleRemovePrompt(index)}
-                      className="text-zinc-500 hover:text-red-400"
+                      onClick={() => handleRemovePrompt(idx)}
+                      title="Delete question"
+                      className="text-zinc-500 hover:text-red-400 p-1 transition shrink-0"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -308,12 +320,13 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
                   placeholder="Add a quick question prompt..."
                   value={newPromptText}
                   onChange={(e) => setNewPromptText(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddPrompt()}
                   className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-xs focus:outline-none focus:border-zinc-500 placeholder-zinc-500"
                 />
                 <button
                   type="button"
                   onClick={handleAddPrompt}
-                  className="bg-zinc-100 hover:bg-white text-black text-xs font-semibold uppercase tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1"
+                  className="bg-zinc-100 hover:bg-white text-black text-xs font-semibold uppercase tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1 shrink-0 transition"
                 >
                   <Plus className="w-3.5 h-3.5" /> Add
                 </button>
@@ -330,11 +343,12 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
               Interactive Live Widget Preview
             </h2>
             <button
+              type="button"
               onClick={handleResetTestChat}
               title="Reset Test Chat"
-              className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 transition"
+              className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-1 rounded-lg transition"
             >
-              <RefreshCw className="w-3 h-3" /> Reset Chat
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-400" /> <span>Reset Chat</span>
             </button>
           </div>
 
@@ -361,7 +375,7 @@ export const WidgetCustomizer: React.FC<WidgetCustomizerProps> = ({
                   )}
                   <div>
                     <div className="font-bold text-sm leading-tight">{name}</div>
-                    <div className="text-[10px] text-white/80">⚡ AI Support Online</div>
+                    <div className="text-[10px] text-white/80">⚡ 24x7 Support Online</div>
                   </div>
                 </div>
               </div>
