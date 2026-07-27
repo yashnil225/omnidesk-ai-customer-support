@@ -26,13 +26,13 @@ app.get('/widget.js', (req, res) => {
   window.__OmniDeskWidgetLoaded = true;
 
   // Find script element to extract config
-  var currentScript = document.currentScript || (function() {
+  var currentScript = document.currentScript || document.querySelector('script[data-chatbot-id]') || document.querySelector('script[src*="widget.js"]') || (function() {
     var scripts = document.getElementsByTagName('script');
     return scripts[scripts.length - 1];
   })();
 
-  var chatbotId = currentScript.getAttribute('data-chatbot-id') || 'bot_demo_101';
-  var serverUrl = currentScript.src.replace('/widget.js', '');
+  var chatbotId = (currentScript && currentScript.getAttribute('data-chatbot-id')) || 'bot_1785171802386';
+  var serverUrl = (currentScript && currentScript.src) ? currentScript.src.replace('/widget.js', '') : 'https://omnidesk-ai-customer-support.vercel.app';
 
   var state = {
     isOpen: false,
@@ -43,10 +43,21 @@ app.get('/widget.js', (req, res) => {
     visitorId: 'vis_' + Math.random().toString(36).substring(2, 9)
   };
 
-  // Create Widget DOM container
+  // Create Widget DOM container safely
   var container = document.createElement('div');
   container.id = 'omnidesk-widget-root';
-  document.body.appendChild(container);
+  
+  function mountContainer() {
+    if (!document.getElementById('omnidesk-widget-root')) {
+      (document.body || document.documentElement).appendChild(container);
+    }
+  }
+
+  if (document.body) {
+    mountContainer();
+  } else {
+    document.addEventListener('DOMContentLoaded', mountContainer);
+  }
 
   // Fetch Chatbot configuration
   fetch(serverUrl + '/api/chatbot/' + chatbotId)
