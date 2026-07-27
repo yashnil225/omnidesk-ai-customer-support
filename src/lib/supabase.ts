@@ -43,109 +43,91 @@ export async function fetchUserProfile(sessionUser: any): Promise<TenantUser> {
 }
 
 export async function signUpTenant(email: string, pass: string, companyName: string): Promise<TenantUser> {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: pass,
-      options: {
-        data: {
-          company_name: companyName,
-        },
-      },
-    });
-
-    if (error) {
-      console.warn('Supabase auth signUp warning:', error.message);
-    }
-
-    const userId = data.user?.id || 'usr_' + Date.now();
-    const tenant: TenantUser = {
-      uid: userId,
-      email,
-      companyName: companyName || 'My Business',
-      createdAt: new Date().toISOString(),
-      plan: 'pro',
-    };
-
-    // Save for mock fallback
-    if (companyName) {
-      localStorage.setItem('mock_company_name', companyName);
-    }
-
-    // Try storing in 'users' or 'profiles' table in Supabase
-    try {
-      await supabase.from('profiles').upsert({
-        id: userId,
-        email,
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: pass,
+    options: {
+      data: {
         company_name: companyName,
-        plan: 'pro',
-        created_at: tenant.createdAt,
-      });
-    } catch (dbErr) {
-      console.warn('Supabase DB profiles table sync optional note:', dbErr);
-    }
+      },
+    },
+  });
 
-    return tenant;
-  } catch (err: any) {
-    console.warn('Fallback local signup for:', email);
-    return {
-      uid: 'usr_' + Date.now(),
-      email,
-      companyName: companyName || 'My Business',
-      createdAt: new Date().toISOString(),
-      plan: 'pro',
-    };
+  if (error) {
+    throw new Error(error.message);
   }
+
+  if (!data.user) {
+    throw new Error('Sign up failed. Please try again.');
+  }
+
+  const userId = data.user.id;
+  const tenant: TenantUser = {
+    uid: userId,
+    email,
+    companyName: companyName || 'My Business',
+    createdAt: new Date().toISOString(),
+    plan: 'pro',
+  };
+
+  // Store profile in Supabase profiles table
+  try {
+    await supabase.from('profiles').upsert({
+      id: userId,
+      email,
+      company_name: companyName,
+      plan: 'pro',
+      created_at: tenant.createdAt,
+    });
+  } catch (dbErr) {
+    console.warn('Supabase DB profiles table sync note:', dbErr);
+  }
+
+  return tenant;
 }
 
 export async function signInTenant(email: string, pass: string): Promise<TenantUser> {
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password: pass,
-    });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password: pass,
+  });
 
-    if (error) {
-      console.warn('Supabase auth signIn warning:', error.message);
-    }
-
-    const userId = data.user?.id || 'usr_' + Date.now();
-    
-    // Try fetching user profile from Supabase table
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (profile) {
-        return {
-          uid: profile.id,
-          email: profile.email || email,
-          companyName: profile.company_name || data.user?.user_metadata?.company_name || data.user?.raw_user_meta_data?.company_name || localStorage.getItem('mock_company_name') || 'My Business',
-          createdAt: profile.created_at || new Date().toISOString(),
-          plan: profile.plan || 'pro',
-        };
-      }
-    } catch (_) {}
-
-    return {
-      uid: userId,
-      email: data.user?.email || email,
-      companyName: data.user?.user_metadata?.company_name || data.user?.raw_user_meta_data?.company_name || localStorage.getItem('mock_company_name') || 'My Business',
-      createdAt: new Date().toISOString(),
-      plan: 'pro',
-    };
-  } catch (err: any) {
-    return {
-      uid: 'usr_demo_1',
-      email,
-      companyName: localStorage.getItem('mock_company_name') || 'Acme SaaS Corp',
-      createdAt: new Date().toISOString(),
-      plan: 'pro',
-    };
+  if (error) {
+    throw new Error(error.message);
   }
+
+  if (!data.user) {
+    throw new Error('Authentication failed. Please check your credentials.');
+  }
+
+  const userId = data.user.id;
+    
+  // Try fetching user profile from Supabase table
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (profile) {
+      return {
+        uid: profile.id,
+        email: profile.email || email,
+        companyName: profile.company_name || data.user.user_metadata?.company_name || 'My Business',
+        createdAt: profile.created_at || new Date().toISOString(),
+        plan: profile.plan || 'pro',
+      };
+    }
+  } catch (_) {}
+
+  return {
+    uid: userId,
+    email: data.user.email || email,
+    companyName: data.user.user_metadata?.company_name || 'My Business',
+    createdAt: new Date().toISOString(),
+    plan: 'pro',
+  };
 }
 
 export async function signInWithGoogle(): Promise<TenantUser> {

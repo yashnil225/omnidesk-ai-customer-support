@@ -70,7 +70,14 @@ export const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
         body: JSON.stringify({ url: targetUrl }),
       });
 
-      const data = await res.json();
+      let data;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(`Server returned non-JSON response: ${res.status} ${res.statusText}. HTML/Text snippet: ${text.substring(0, 100)}`);
+      }
 
       if (data.success) {
         const urlItem: KBUrl = {
@@ -89,7 +96,7 @@ export const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
         setUrlError(data.error || 'Could not crawl URL');
       }
     } catch (err: any) {
-      setUrlError('Failed to connect to crawler server');
+      setUrlError(`Crawler error: ${err.message}`);
     } finally {
       setIsCrawlingUrl(false);
     }
