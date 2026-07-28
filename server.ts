@@ -594,10 +594,10 @@ ${kbContextText}`;
       // 1. Try OpenRouter API with fallbacks
       if (openRouterKey) {
         const modelsToTry = [
-          'google/gemini-2.0-pro-exp-02-05:free',
-          'meta-llama/llama-3.3-70b-instruct:free',
-          'deepseek/deepseek-chat:free',
-          'google/gemini-2.0-flash-lite-preview-02-05:free'
+          'openrouter/free',
+          'google/gemma-4-31b-it:free',
+          'nvidia/nemotron-3-super-120b-a12b:free',
+          'openai/gpt-oss-20b:free'
         ];
 
         for (const modelName of modelsToTry) {
