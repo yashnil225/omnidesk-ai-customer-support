@@ -537,6 +537,22 @@ app.post('/api/chat', async (req, res) => {
       };
     }
 
+    // Runtime Sanitizer: Purge any legacy Healthy You / Glucose sample data stored in DB
+    if (bot) {
+      if (Array.isArray(bot.kbFaqs)) {
+        bot.kbFaqs = bot.kbFaqs.filter((f: any) =>
+          !JSON.stringify(f).toLowerCase().includes('glucose') &&
+          !JSON.stringify(f).toLowerCase().includes('healthy you')
+        );
+      }
+      if (Array.isArray(bot.kbDocs)) {
+        bot.kbDocs = bot.kbDocs.filter((d: any) => {
+          const str = JSON.stringify(d).toLowerCase();
+          return !str.includes('healthy you product catalog') && !str.includes('glucose instant drink');
+        });
+      }
+    }
+
     // Build rich context from Chatbot Knowledge Base
     let kbContextText = '';
     if (bot.kbFaqs && bot.kbFaqs.length > 0) {
@@ -574,48 +590,63 @@ ${kbContextText}`;
     });
 
     const userMessageText = recentMessages.length > 0 ? (recentMessages[recentMessages.length - 1].text || '') : 'Hello';
+    const userMessageLower = userMessageText.toLowerCase();
+    const isGlucoseQuery = userMessageLower.includes('glucose');
+    const catalogHasGlucose = kbContextText.toLowerCase().includes('glucose');
+
     let aiText = '';
 
-    // Attempt AI API call
-    try {
-      const apiKey = process.env.OPENROUTER_API_KEY;
-      if (apiKey) {
-        const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.0-flash-001',
-            messages: [
-              { role: 'system', content: systemInstruction },
-              { role: 'user', content: `${chatHistoryPrompt}\nProvide the Support Bot's next reply to the Customer:` }
-            ]
-          })
-        });
+    // Direct Handler for Glucose queries when Glucose is not in live store catalog
+    if (isGlucoseQuery && !catalogHasGlucose) {
+      aiText = "Glucose / Healthy You Glucose Energy Drink is currently not listed or available on our Shopify store website. We only provide assistance for products actively listed in our live store catalog.";
+    }
 
-        if (openRouterRes.ok) {
-          const data = await openRouterRes.json();
-          if (data.choices && data.choices.length > 0) {
-            aiText = data.choices[0].message.content.trim();
+    // Attempt AI API call if not handled by direct catalog guardrail
+    if (!aiText) {
+      try {
+        const apiKey = process.env.OPENROUTER_API_KEY;
+        if (apiKey) {
+          const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'google/gemini-2.0-flash-001',
+              messages: [
+                { role: 'system', content: systemInstruction },
+                { role: 'user', content: `${chatHistoryPrompt}\nProvide the Support Bot's next reply to the Customer:` }
+              ]
+            })
+          });
+
+          if (openRouterRes.ok) {
+            const data = await openRouterRes.json();
+            if (data.choices && data.choices.length > 0) {
+              aiText = data.choices[0].message.content.trim();
+            }
           }
         }
+      } catch (apiErr) {
+        console.warn('AI service fallback triggered:', apiErr);
       }
-    } catch (apiErr) {
-      console.warn('AI service fallback triggered:', apiErr);
     }
 
     // Fallback Knowledge Base matcher if AI API key/network is unavailable
     if (!aiText) {
-      const lower = userMessageText.toLowerCase();
-      if (lower.includes('ship') || lower.includes('deliver') || lower.includes('track')) {
+      if (userMessageLower.includes('ship') || userMessageLower.includes('deliver') || userMessageLower.includes('track')) {
         aiText = "We offer standard shipping with delivery in 3-5 business days. Express shipping is also available at checkout.";
-      } else if (lower.includes('contact') || lower.includes('support') || lower.includes('help') || lower.includes('email')) {
+      } else if (userMessageLower.includes('contact') || userMessageLower.includes('support') || userMessageLower.includes('help') || userMessageLower.includes('email')) {
         aiText = "You can reach customer support through our contact page or email. How can I help you today?";
       } else {
         aiText = "Hello! I am your AI Support Assistant. I can help answer questions about our live products, order tracking, and store policies. What would you like to know?";
       }
+    }
+
+    // Post-processing safety net: Guarantee Glucose or sample brand is never incorrectly claimed as available
+    if (aiText.toLowerCase().includes('glucose') && !catalogHasGlucose) {
+      aiText = "Glucose / Healthy You Glucose Energy Drink is currently not listed or available on our Shopify store website. Please check our active store products or contact customer support.";
     }
 
     const newConvId = conversationId || 'conv_' + Math.random().toString(36).substring(2, 9);
