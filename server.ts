@@ -7,8 +7,16 @@ const PORT = 3000;
 
 app.use(express.json());
 
-
-
+// Global CORS Middleware to allow widget fetch from external sites
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ffpiakhvtzuqzurqaepd.supabase.co';
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -537,22 +545,6 @@ app.post('/api/chat', async (req, res) => {
       };
     }
 
-    // Runtime Sanitizer: Purge any legacy Healthy You / Glucose sample data stored in DB
-    if (bot) {
-      if (Array.isArray(bot.kbFaqs)) {
-        bot.kbFaqs = bot.kbFaqs.filter((f: any) =>
-          !JSON.stringify(f).toLowerCase().includes('glucose') &&
-          !JSON.stringify(f).toLowerCase().includes('healthy you')
-        );
-      }
-      if (Array.isArray(bot.kbDocs)) {
-        bot.kbDocs = bot.kbDocs.filter((d: any) => {
-          const str = JSON.stringify(d).toLowerCase();
-          return !str.includes('healthy you product catalog') && !str.includes('glucose instant drink');
-        });
-      }
-    }
-
     // Build rich context from Chatbot Knowledge Base
     let kbContextText = '';
     if (bot.kbFaqs && bot.kbFaqs.length > 0) {
@@ -574,7 +566,7 @@ ${bot.customSystemPrompt || ''}
 
 STRICT CATALOG & ACCURACY RULES:
 1. Answer customer questions directly, clearly, politely, and accurately using ONLY the business knowledge base context and Shopify store product catalog provided below.
-2. STRICT CATALOG RULE: You must ONLY reference, describe, or recommend products explicitly listed in the Knowledge Base / Shopify catalog context below. If a user asks about a product (such as Glucose, Glucose Energy Drink, or any unlisted product) that is NOT present in the provided catalog context, you MUST explicitly inform them that the item is currently NOT listed or available in our store catalog. Do NOT assume, invent, or hallucinate products outside the catalog.
+2. STRICT CATALOG RULE: You must ONLY reference, describe, or recommend products explicitly listed in the Knowledge Base / Shopify catalog context below. If a user asks about a product that is NOT present in the provided catalog context, you MUST explicitly inform them that the item is currently NOT listed or available in our store catalog. Do NOT assume, invent, or hallucinate products outside the catalog.
 3. Maintain a friendly, professional, and helpful tone.
 4. Keep responses concise (typically 2 to 4 sentences or a clean bullet list).
 5. NEVER invent prices, discounts, or specifications not supported by the knowledge base.
@@ -590,16 +582,8 @@ ${kbContextText}`;
     });
 
     const userMessageText = recentMessages.length > 0 ? (recentMessages[recentMessages.length - 1].text || '') : 'Hello';
-    const userMessageLower = userMessageText.toLowerCase();
-    const isGlucoseQuery = userMessageLower.includes('glucose');
-    const catalogHasGlucose = kbContextText.toLowerCase().includes('glucose');
 
     let aiText = '';
-
-    // Direct Handler for Glucose queries when Glucose is not in live store catalog
-    if (isGlucoseQuery && !catalogHasGlucose) {
-      aiText = "Glucose / Healthy You Glucose Energy Drink is currently not listed or available on our Shopify store website. We only provide assistance for products actively listed in our live store catalog.";
-    }
 
     // Attempt AI API call if not handled by direct catalog guardrail
     if (!aiText) {
@@ -758,10 +742,6 @@ ${kbContextText}`;
       }
     }
 
-    // Post-processing safety net: Guarantee Glucose or sample brand is never incorrectly claimed as available
-    if (aiText.toLowerCase().includes('glucose') && !catalogHasGlucose) {
-      aiText = "Glucose / Healthy You Glucose Energy Drink is currently not listed or available on our Shopify store website. Please check our active store products or contact customer support.";
-    }
 
     const newConvId = conversationId || 'conv_' + Math.random().toString(36).substring(2, 9);
 
