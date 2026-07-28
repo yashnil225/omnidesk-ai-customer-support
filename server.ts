@@ -568,8 +568,9 @@ STRICT CATALOG & ACCURACY RULES:
 1. Answer customer questions directly, clearly, politely, and accurately using ONLY the business knowledge base context and Shopify store product catalog provided below.
 2. STRICT CATALOG RULE: You must ONLY reference, describe, or recommend products explicitly listed in the Knowledge Base / Shopify catalog context below. If a user asks about a product that is NOT present in the provided catalog context, you MUST explicitly inform them that the item is currently NOT listed or available in our store catalog. Do NOT assume, invent, or hallucinate products outside the catalog.
 3. Maintain a friendly, professional, and helpful tone.
-4. Keep responses concise (typically 2 to 4 sentences or a clean bullet list).
-5. NEVER invent prices, discounts, or specifications not supported by the knowledge base.
+4. SUMMARIZE & STRUCTURE: Do NOT copy and paste long blocks of text or raw descriptions directly from the source catalog. You must summarize and synthesize the information into a well-structured, easy-to-read, and conversational response.
+5. Use bullet points or short paragraphs for readability. Keep responses concise.
+6. NEVER invent prices, discounts, or specifications not supported by the knowledge base.
 
 ${kbContextText}`;
 
@@ -593,10 +594,10 @@ ${kbContextText}`;
       // 1. Try OpenRouter API with fallbacks
       if (openRouterKey) {
         const modelsToTry = [
-          'google/gemini-2.0-flash-001',
-          'google/gemini-2.0-flash-exp:free',
-          'meta-llama/llama-3.3-70b-instruct',
-          'openai/gpt-4o-mini'
+          'google/gemini-2.0-pro-exp-02-05:free',
+          'meta-llama/llama-3.3-70b-instruct:free',
+          'deepseek/deepseek-chat:free',
+          'google/gemini-2.0-flash-lite-preview-02-05:free'
         ];
 
         for (const modelName of modelsToTry) {
@@ -730,13 +731,15 @@ ${kbContextText}`;
 
         if (!aiText) {
           if (productSnippets.length > 0) {
-            aiText = `Here is what I found in our live store catalog:\n${productSnippets.slice(0, 5).join('\n')}`;
+            // Clean up the raw snippets to look less like copy-paste
+            const cleanSnippets = productSnippets.slice(0, 4).map(s => '• ' + s.replace(/^[#-]+\s*\**.*?\**:\s*/, '').substring(0, 150));
+            aiText = `*I am currently experiencing high traffic and running in offline search mode.* Here is what I found:\n${cleanSnippets.join('\n')}`;
           } else if (productTitles.length > 0) {
-            aiText = `We currently offer the following active products in our store catalog:\n• ${productTitles.slice(0, 10).join('\n• ')}\n\nHow can I assist you with any of these items?`;
+            aiText = `*I am currently in offline search mode.* We offer the following products:\n• ${productTitles.slice(0, 6).join('\n• ')}\n\nPlease contact support for more details.`;
           } else if (lower.includes('product') || lower.includes('catalog') || lower.includes('item') || lower.includes('buy') || lower.includes('sell')) {
-            aiText = "Our store catalog is currently being updated. Please check back shortly or sync your Shopify store URL in the Knowledge Base dashboard to train the bot on your live product catalog.";
+            aiText = "Our store catalog is currently being updated. Please check back shortly or sync your Shopify store URL in the dashboard.";
           } else {
-            aiText = "Hello! I am your AI Support Assistant. I can help answer questions about our store products, order tracking, and policies. What would you like to know?";
+            aiText = "Hello! I am your AI Support Assistant. I can help answer questions about our store products. What would you like to know?";
           }
         }
       }
