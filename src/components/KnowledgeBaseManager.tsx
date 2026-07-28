@@ -17,7 +17,8 @@ import {
   FileUp,
   FileType,
   FileCheck,
-  RefreshCw
+  RefreshCw,
+  ShoppingBag
 } from 'lucide-react';
 import { ChatbotConfig, FAQItem, KBUrl, KBDocument } from '../types';
 
@@ -38,7 +39,13 @@ export const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
     );
   }
 
-  const [activeKbTab, setActiveKbTab] = useState<'urls' | 'faqs' | 'docs' | 'prompt'>('faqs');
+  const [activeKbTab, setActiveKbTab] = useState<'shopify' | 'urls' | 'faqs' | 'docs' | 'prompt'>('shopify');
+
+  // Shopify Store Sync State
+  const [shopifyStoreUrl, setShopifyStoreUrl] = useState('');
+  const [isSyncingShopify, setIsSyncingShopify] = useState(false);
+  const [shopifySyncError, setShopifySyncError] = useState('');
+  const [shopifySuccessMsg, setShopifySuccessMsg] = useState('');
 
   // URL States
   const [newUrl, setNewUrl] = useState('');
@@ -63,6 +70,53 @@ export const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
 
   // System Prompt State
   const [systemPrompt, setSystemPrompt] = useState(chatbot.customSystemPrompt || '');
+
+  // Shopify Live Sync Handler
+  const handleSyncShopifyStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopifyStoreUrl.trim()) return;
+
+    setIsSyncingShopify(true);
+    setShopifySyncError('');
+    setShopifySuccessMsg('');
+
+    try {
+      const res = await fetch('/api/shopify/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeUrl: shopifyStoreUrl.trim() }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        // Filter out old Shopify live catalog documents and sample documents
+        const existingDocs = (chatbot.kbDocs || []).filter(
+          (d) => !d.title.includes('Shopify Live Catalog') && !d.title.includes('Healthy You')
+        );
+
+        const newDoc: KBDocument = {
+          id: 'doc_shopify_' + Date.now(),
+          title: data.docTitle || 'Shopify Live Product Catalog',
+          content: data.content,
+          updatedAt: new Date().toISOString(),
+          type: 'doc',
+          fileName: 'shopify-products.json',
+          fileSize: `${data.count} Products`,
+        };
+
+        const updatedDocs = [newDoc, ...existingDocs];
+        onUpdateChatbot({ ...chatbot, kbDocs: updatedDocs });
+        setShopifySuccessMsg(`Successfully synced ${data.count} live product(s) from Shopify! Your AI chatbot is updated.`);
+        setShopifyStoreUrl('');
+      } else {
+        setShopifySyncError(data.error || 'Failed to sync Shopify store catalog.');
+      }
+    } catch (err: any) {
+      setShopifySyncError(`Shopify sync error: ${err.message}`);
+    } finally {
+      setIsSyncingShopify(false);
+    }
+  };
 
   // 1. Handle URL Indexing
   const handleCrawlUrl = async (e: React.FormEvent) => {
@@ -317,6 +371,18 @@ export const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
       {/* Tabs Bar */}
       <div className="flex items-center gap-2 border-b border-zinc-800 pb-1 overflow-x-auto">
         <button
+          onClick={() => setActiveKbTab('shopify')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition ${
+            activeKbTab === 'shopify'
+              ? 'bg-zinc-800 text-white shadow-xs'
+              : 'text-zinc-400 hover:bg-zinc-800/40'
+          }`}
+        >
+          <ShoppingBag className="w-4 h-4 text-emerald-400" />
+          <span>Shopify Live Catalog</span>
+        </button>
+
+        <button
           onClick={() => setActiveKbTab('faqs')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition ${
             activeKbTab === 'faqs'
@@ -364,6 +430,107 @@ export const KnowledgeBaseManager: React.FC<KnowledgeBaseManagerProps> = ({
           <span>System Persona & Rules</span>
         </button>
       </div>
+
+      {/* TAB 0: SHOPIFY LIVE STORE CATALOG */}
+      {activeKbTab === 'shopify' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Sync Form */}
+          <div className="bg-[#0f0f0f] p-6 rounded-2xl border border-zinc-800 shadow-xs space-y-4">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-bold text-white text-base">Sync Shopify Store Live</h3>
+            </div>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Enter your public Shopify store URL (e.g. <code className="bg-zinc-900 text-emerald-400 px-1.5 py-0.5 rounded border border-zinc-800 font-mono">https://yourstore.myshopify.com</code> or your custom store domain).
+              Our system will automatically fetch your live product catalog directly from Shopify.
+            </p>
+
+            <form onSubmit={handleSyncShopifyStore} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-mono font-semibold text-zinc-400 uppercase tracking-widest mb-1">
+                  Shopify Store Domain / URL
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="https://yourstore.myshopify.com"
+                  value={shopifyStoreUrl}
+                  onChange={(e) => setShopifyStoreUrl(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-xs focus:outline-none focus:border-emerald-500 placeholder-zinc-500"
+                />
+              </div>
+
+              {shopifySyncError && (
+                <div className="p-3 bg-red-950/60 border border-red-800/60 rounded-xl text-red-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{shopifySyncError}</span>
+                </div>
+              )}
+
+              {shopifySuccessMsg && (
+                <div className="p-3 bg-emerald-950/60 border border-emerald-800/60 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{shopifySuccessMsg}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSyncingShopify}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold uppercase tracking-wider py-2.5 rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSyncingShopify ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Syncing Live Catalog...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Sync Live Shopify Catalog</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          {/* Shopify Synced Catalog Preview */}
+          <div className="lg:col-span-2 bg-[#0f0f0f] p-6 rounded-2xl border border-zinc-800 shadow-xs space-y-4">
+            <h3 className="font-bold text-white text-base">
+              Active Shopify Catalog Knowledge Base
+            </h3>
+
+            {chatbot.kbDocs?.some((d) => d.title.includes('Shopify Live Catalog')) ? (
+              <div className="space-y-4">
+                {chatbot.kbDocs
+                  .filter((d) => d.title.includes('Shopify Live Catalog'))
+                  .map((doc) => (
+                    <div key={doc.id} className="p-4 bg-zinc-900 rounded-xl border border-zinc-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShoppingBag className="w-4 h-4 text-emerald-400" />
+                          <span className="font-bold text-white text-sm">{doc.title}</span>
+                        </div>
+                        <span className="text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-0.5 rounded-full">
+                          {doc.fileSize || 'Live Catalog'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-zinc-300 font-mono bg-black/60 p-3 rounded-lg max-h-60 overflow-y-auto whitespace-pre-wrap">
+                        {doc.content}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-zinc-500 text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+                <ShoppingBag className="w-8 h-8 text-zinc-600 mx-auto" />
+                <p>No active Shopify catalog synced yet.</p>
+                <p className="text-zinc-600">Enter your store URL on the left to sync live products automatically!</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: FAQs */}
       {activeKbTab === 'faqs' && (

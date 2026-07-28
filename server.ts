@@ -61,12 +61,12 @@ app.get('/widget.js', (req, res) => {
 
   var defaultConfig = {
     id: chatbotId,
-    name: 'Healthy You AI Assistant',
-    welcomeMessage: 'Hello! Welcome to Healthy You! How can I help you today?',
+    name: 'AI Support Assistant',
+    welcomeMessage: 'Hello! How can I assist you with our store products and policies today?',
     primaryColor: '#15b7cb',
     position: 'bottom-right',
     avatarUrl: '',
-    suggestedPrompts: ['Shipping Policy', 'Track My Order', 'Product Recommendations'],
+    suggestedPrompts: ['Shipping Policy', 'Track My Order', 'Product Catalog'],
     collectUserEmail: true
   };
 
@@ -402,17 +402,11 @@ app.get('/widget.js', (req, res) => {
       .catch(function(err) {
         showTyping(false);
         var lower = trimmed.toLowerCase();
-        var reply = "Welcome to Healthy You Healthcare! How can I assist you with our natural sweeteners, glucose energy drinks, baby cereals, or shipping policies?";
-        if (lower.indexOf('stevia') !== -1 || lower.indexOf('sugar') !== -1 || lower.indexOf('sweetener') !== -1) {
-          reply = "Healthy You offers Natural Stevia Sweetener (made from natural Meethi Tulsi, 0 calories) and Sugar Like Sugar Free Sucralose for all your beverages and desserts!";
-        } else if (lower.indexOf('glucose') !== -1 || lower.indexOf('energy') !== -1 || lower.indexOf('drink') !== -1) {
-          reply = "Healthy You Glucose Instant Drink with Vitamin C Lemon provides instant energy to fight tiredness, enriched with Vitamin C, calcium, and phosphorus.";
-        } else if (lower.indexOf('baby') !== -1 || lower.indexOf('kid') !== -1 || lower.indexOf('grainylac') !== -1) {
-          reply = "We offer GrainyLac multigrain nutrition baby cereal and Kidogrow health drinks for growing children!";
-        } else if (lower.indexOf('ship') !== -1 || lower.indexOf('deliver') !== -1 || lower.indexOf('track') !== -1) {
-          reply = "We offer standard shipping across India with delivery in 3-5 business days.";
+        var reply = "Welcome! How can I assist you with our store products, orders, or shipping policies today?";
+        if (lower.indexOf('ship') !== -1 || lower.indexOf('deliver') !== -1 || lower.indexOf('track') !== -1) {
+          reply = "We offer standard shipping with delivery in 3-5 business days.";
         } else if (lower.indexOf('contact') !== -1 || lower.indexOf('email') !== -1 || lower.indexOf('support') !== -1) {
-          reply = "You can reach Healthy You Healthcare Pvt. Ltd. through our contact page or email us at support@healthyyou.co.in.";
+          reply = "You can reach our customer support team through our contact page or email.";
         }
         addMessage('bot', reply);
       });
@@ -532,32 +526,13 @@ app.post('/api/chat', async (req, res) => {
 
     if (!bot) {
       bot = {
-        id: chatbotId || 'bot_1785171802386',
-        name: 'Healthy You AI Assistant',
-        welcomeMessage: 'Hello! Welcome to Healthy You Healthcare. How can I help you today?',
+        id: chatbotId || 'bot_default',
+        name: 'AI Support Assistant',
+        welcomeMessage: 'Hello! Welcome to our store. How can I help you today?',
         primaryColor: '#15b7cb',
-        customSystemPrompt: 'You are the official AI Assistant for Healthy You Healthcare Pvt. Ltd. Answer questions about Healthy You products, ingredients, shipping, and brands accurately.',
-        kbFaqs: [
-          { question: 'What products does Healthy You offer?', answer: 'Healthy You offers a range of family nutrition products including Natural Stevia Sweetener (Meethi Tulsi), Sugar Like Sugar Free Sucralose, Glucose Instant Drink with Vitamin C Lemon, GrainyLac baby cereal, Kidogrow, Yummy for Mummy, and Pro-teeno protein supplements.' },
-          { question: 'Where is Healthy You manufactured?', answer: 'Healthy You products are manufactured by Healthy You Healthcare Pvt. Ltd., founded in Patna to provide trusted, high-quality family nutrition.' },
-          { question: 'What is your shipping policy?', answer: 'We offer standard shipping across India with delivery in 3-5 business days. Express shipping is also available at checkout.' },
-          { question: 'Are Healthy You sweeteners safe for diabetic care?', answer: 'Yes! Healthy You Natural Stevia and Sugar Like Sugar Free (Sucralose) are zero/low-calorie sweeteners suitable for beverages, desserts, and cooking without worrying about sugar load.' },
-          { question: 'How can I contact customer support?', answer: 'You can reach Healthy You Healthcare Pvt. Ltd. through our contact page or email us at support@healthyyou.co.in.' }
-        ],
-        kbDocs: [
-          {
-            title: 'Healthy You Product Catalog & Brand Overview',
-            content: 'Healthy You Healthcare Pvt. Ltd. Brands & Products:\n' +
-                     '1. Healthy You Natural Stevia Sweetener - Made from naturally sweet leaves of stevia plant (Meethi Tulsi). Zero calories, great for beverages, desserts, and everyday cooking.\n' +
-                     '2. Healthy You Sugar Like Sugar Free Sucralose - Low-calorie sweetener for sweet tooth cravings, suitable for hot/cold beverages and baking.\n' +
-                     '3. Healthy You Glucose Instant Drink with Vitamin C Lemon - Ready source of energy to fight tiredness, enriched with Vitamin C, calcium & phosphorus for active adults and kids.\n' +
-                     '4. GrainyLac - Multigrain nutrition baby cereal.\n' +
-                     '5. Kidogrow - Growth and health drink for active children.\n' +
-                     '6. Yummy for Mummy - Specialized nutrition & lactation support for mothers.\n' +
-                     '7. Pro-teeno & Pro-teeno Cure - Protein supplements for fitness and recovery.\n' +
-                     'Manufactured by: Healthy You Healthcare Pvt. Ltd., Patna.'
-          }
-        ],
+        customSystemPrompt: 'You are an official AI Customer Support assistant. Answer questions strictly based on the provided Knowledge Base and live store product catalog.',
+        kbFaqs: [],
+        kbDocs: [],
         kbUrls: []
       };
     }
@@ -572,20 +547,21 @@ app.post('/api/chat', async (req, res) => {
     }
 
     if (bot.kbDocs && bot.kbDocs.length > 0) {
-      kbContextText += '\n--- KNOWLEDGE BASE: DOCUMENTS & POLICIES ---\n';
+      kbContextText += '\n--- KNOWLEDGE BASE: DOCUMENTS & LIVE STORE CATALOG ---\n';
       bot.kbDocs.forEach((doc: any) => {
         kbContextText += `[Document Title: ${doc.title}]\n${doc.content}\n\n`;
       });
     }
 
-    const systemInstruction = `You are ${bot.name}, official AI Customer Support for Healthy You Healthcare Pvt. Ltd.
+    const systemInstruction = `You are ${bot.name}, official AI Customer Support assistant for the store.
 ${bot.customSystemPrompt || ''}
 
-GUIDELINES FOR YOUR RESPONSES:
-1. Answer customer questions directly, clearly, politely, and accurately using the business knowledge base context provided below.
-2. Maintain a friendly and helpful corporate tone.
-3. Keep responses concise (typically 2 to 4 sentences or a clean bullet list).
-4. NEVER invent facts or prices not supported by the knowledge base.
+STRICT CATALOG & ACCURACY RULES:
+1. Answer customer questions directly, clearly, politely, and accurately using ONLY the business knowledge base context and Shopify store product catalog provided below.
+2. STRICT CATALOG RULE: You must ONLY reference, describe, or recommend products explicitly listed in the Knowledge Base / Shopify catalog context below. If a user asks about a product (such as Glucose, Glucose Energy Drink, or any unlisted product) that is NOT present in the provided catalog context, you MUST explicitly inform them that the item is currently NOT listed or available in our store catalog. Do NOT assume, invent, or hallucinate products outside the catalog.
+3. Maintain a friendly, professional, and helpful tone.
+4. Keep responses concise (typically 2 to 4 sentences or a clean bullet list).
+5. NEVER invent prices, discounts, or specifications not supported by the knowledge base.
 
 ${kbContextText}`;
 
@@ -633,18 +609,12 @@ ${kbContextText}`;
     // Fallback Knowledge Base matcher if AI API key/network is unavailable
     if (!aiText) {
       const lower = userMessageText.toLowerCase();
-      if (lower.includes('stevia') || lower.includes('sugar free') || lower.includes('sweetener')) {
-        aiText = "Healthy You offers Natural Stevia Sweetener (made from natural Meethi Tulsi leaves, 0 calories) and Sugar Like Sugar Free Sucralose for hot/cold beverages and baking!";
-      } else if (lower.includes('glucose') || lower.includes('energy') || lower.includes('drink')) {
-        aiText = "Healthy You Glucose Instant Drink with Vitamin C Lemon provides instant energy to fight tiredness, enriched with Vitamin C, calcium, and phosphorus.";
-      } else if (lower.includes('baby') || lower.includes('kid') || lower.includes('grainylac') || lower.includes('kidogrow')) {
-        aiText = "We offer GrainyLac multigrain nutrition baby cereal, Kidogrow health drinks for active kids, and Yummy for Mummy lactation support for mothers!";
-      } else if (lower.includes('ship') || lower.includes('deliver') || lower.includes('track')) {
-        aiText = "Healthy You offers standard shipping across India with delivery in 3-5 business days. Express shipping is also available at checkout.";
+      if (lower.includes('ship') || lower.includes('deliver') || lower.includes('track')) {
+        aiText = "We offer standard shipping with delivery in 3-5 business days. Express shipping is also available at checkout.";
       } else if (lower.includes('contact') || lower.includes('support') || lower.includes('help') || lower.includes('email')) {
-        aiText = "You can reach Healthy You Healthcare Pvt. Ltd. through our contact page or email us at support@healthyyou.co.in. How can I help you today?";
+        aiText = "You can reach customer support through our contact page or email. How can I help you today?";
       } else {
-        aiText = "Welcome to Healthy You Healthcare! I can assist you with questions about our Natural Stevia, Sugar Free Sucralose, Glucose Energy Drink, GrainyLac baby cereal, and shipping policies. What would you like to know?";
+        aiText = "Hello! I am your AI Support Assistant. I can help answer questions about our live products, order tracking, and store policies. What would you like to know?";
       }
     }
 
@@ -659,8 +629,102 @@ ${kbContextText}`;
     console.error('Chat endpoint error:', error);
     res.json({
       success: true,
-      text: "Welcome to Healthy You Healthcare! How can I assist you with our natural sweeteners, glucose energy drinks, or baby cereals today?",
+      text: "Welcome! How can I assist you with our store products and policies today?",
       conversationId: 'conv_fallback'
+    });
+  }
+});
+
+// ==========================================
+// 3.5. SHOPIFY LIVE STORE CATALOG SYNC ENDPOINT
+// ==========================================
+app.post('/api/shopify/sync', async (req, res) => {
+  try {
+    const { storeUrl } = req.body;
+    if (!storeUrl) {
+      return res.status(400).json({ error: 'Store URL parameter is required' });
+    }
+
+    let cleanUrl = storeUrl.trim();
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = 'https://' + cleanUrl;
+    }
+    cleanUrl = cleanUrl.replace(/\/+$/, '');
+
+    const productsJsonUrl = `${cleanUrl}/products.json?limit=250`;
+    console.log(`[Shopify Sync] Fetching live products from: ${productsJsonUrl}`);
+
+    const response = await fetch(productsJsonUrl, {
+      headers: {
+        'User-Agent': 'OmniDeskBot/1.0 (+https://omnidesk.ai)',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(400).json({
+        error: `Could not fetch products from ${cleanUrl}. Ensure the Shopify store is public and accessible.`,
+      });
+    }
+
+    const data = await response.json();
+    const products = data.products || [];
+
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.json({
+        success: true,
+        count: 0,
+        docTitle: 'Shopify Store Catalog',
+        content: 'No products currently listed on this store.',
+      });
+    }
+
+    let catalogMarkdown = `# Live Shopify Product Catalog (${products.length} Active Products)\n\n`;
+    catalogMarkdown += `Catalog fetched live from ${cleanUrl} on ${new Date().toLocaleDateString('en-US')}.\n\n`;
+
+    products.forEach((p: any, idx: number) => {
+      const pTitle = p.title || 'Untitled Product';
+      const pVendor = p.vendor || '';
+      const pType = p.product_type || '';
+      const pTags = Array.isArray(p.tags) ? p.tags.join(', ') : (p.tags || '');
+
+      const pDesc = (p.body_html || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const variants = p.variants || [];
+      const priceList = variants
+        .map((v: any) => `${v.title !== 'Default Title' ? v.title + ': ' : ''}$${v.price || 'N/A'}`)
+        .join(', ');
+
+      catalogMarkdown += `### ${idx + 1}. ${pTitle}\n`;
+      if (pVendor) catalogMarkdown += `- **Vendor / Brand:** ${pVendor}\n`;
+      if (pType) catalogMarkdown += `- **Category:** ${pType}\n`;
+      if (priceList) catalogMarkdown += `- **Price & Variants:** ${priceList}\n`;
+      if (pTags) catalogMarkdown += `- **Tags:** ${pTags}\n`;
+      catalogMarkdown += `- **Description:** ${pDesc || 'No description provided.'}\n\n`;
+    });
+
+    let hostname = cleanUrl;
+    try {
+      hostname = new URL(cleanUrl).hostname;
+    } catch (e) {}
+
+    const docTitle = `Shopify Live Catalog - ${hostname}`;
+
+    res.json({
+      success: true,
+      count: products.length,
+      docTitle,
+      content: catalogMarkdown,
+      storeUrl: cleanUrl,
+    });
+  } catch (err: any) {
+    console.error('[Shopify Sync Error]:', err);
+    res.status(500).json({
+      error: 'Failed to sync Shopify store catalog',
+      details: err.message,
     });
   }
 });
