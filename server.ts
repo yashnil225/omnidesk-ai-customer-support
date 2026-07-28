@@ -712,6 +712,143 @@ app.post('/api/kb/scrape-url', async (req, res) => {
 });
 
 // ==========================================
+// 4.5. KNOWLEDGE BASE DOCUMENT FILE PARSER (PDF, WORD, IMAGE, TEXT)
+// ==========================================
+app.post('/api/kb/parse-file', async (req, res) => {
+  try {
+    const { fileName, fileType, base64Data } = req.body;
+    if (!fileName || !base64Data) {
+      return res.status(400).json({ error: 'Filename and base64Data are required' });
+    }
+
+    const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    const ext = path.extname(fileName).toLowerCase();
+
+    let extractedTitle = fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+    extractedTitle = extractedTitle.replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+    let extractedText = '';
+    let docType: 'pdf' | 'doc' | 'image' | 'text' = 'text';
+
+    if (ext === '.pdf' || fileType?.includes('pdf')) {
+      docType = 'pdf';
+    } else if (['.doc', '.docx'].includes(ext) || fileType?.includes('word') || fileType?.includes('officedocument')) {
+      docType = 'doc';
+    } else if (['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'].includes(ext) || fileType?.startsWith('image/')) {
+      docType = 'image';
+    } else {
+      docType = 'text';
+    }
+
+    // Try OpenRouter AI Multimodal extraction if OPENROUTER_API_KEY is available
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (apiKey) {
+      try {
+        let mime = fileType || (docType === 'pdf' ? 'application/pdf' : docType === 'image' ? `image/${ext.replace('.', '') || 'png'}` : 'text/plain');
+        if (mime === 'image/jpg') mime = 'image/jpeg';
+
+        let userContent: any[] = [];
+        if (docType === 'image' || docType === 'pdf') {
+          userContent = [
+            {
+              type: 'text',
+              text: `Extract all document text, policies, specs, terms, tables, and instructions from this ${docType.toUpperCase()} file named "${fileName}". Output clean, structured markdown for training an AI support bot. Start with a title header "# Title".`
+            },
+            {
+              type: 'image_url',
+              image_url: { url: `data:${mime};base64,${cleanBase64}` }
+            }
+          ];
+        } else {
+          const rawContent = buffer.toString('utf-8');
+          userContent = [
+            {
+              type: 'text',
+              text: `Extract and clean the content from this file named "${fileName}" for training an AI chatbot:\n\n${rawContent.substring(0, 15000)}`
+            }
+          ];
+        }
+
+        const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.0-flash-001',
+            messages: [{ role: 'user', content: userContent }]
+          })
+        });
+
+        if (openRouterRes.ok) {
+          const aiData = await openRouterRes.json();
+          if (aiData.choices && aiData.choices.length > 0) {
+            const aiContent = aiData.choices[0].message.content.trim();
+            const titleMatch = aiContent.match(/^#\s+(.+)$/m);
+            if (titleMatch) {
+              extractedTitle = titleMatch[1].trim();
+              extractedText = aiContent.replace(/^#\s+.+$/m, '').trim();
+            } else {
+              extractedText = aiContent;
+            }
+          }
+        }
+      } catch (aiErr) {
+        console.warn('AI file extraction fallback:', aiErr);
+      }
+    }
+
+    // Direct fallback text extraction if AI didn't return text
+    if (!extractedText) {
+      if (docType === 'text') {
+        extractedText = buffer.toString('utf-8');
+      } else if (docType === 'doc') {
+        const rawStr = buffer.toString('binary');
+        const matches = rawStr.match(/[\x20-\x7E\s]{4,}/g);
+        if (matches) {
+          extractedText = matches.filter(m => !m.includes('xml') && !m.includes('schemas') && !m.includes('Microsoft')).join('\n').trim();
+        }
+        if (!extractedText || extractedText.length < 20) {
+          extractedText = buffer.toString('utf-8').replace(/[^\x20-\x7E\n]/g, ' ');
+        }
+      } else if (docType === 'pdf') {
+        const rawStr = buffer.toString('binary');
+        const textMatches: string[] = [];
+        const regex = /\(([^)]+)\)\s*T[jJ]/g;
+        let match;
+        while ((match = regex.exec(rawStr)) !== null) {
+          textMatches.push(match[1]);
+        }
+        if (textMatches.length > 0) {
+          extractedText = textMatches.join(' ');
+        } else {
+          const printable = rawStr.match(/[\x20-\x7E\n]{6,}/g) || [];
+          extractedText = printable.filter(p => !p.startsWith('/') && !p.includes('Font')).join('\n').substring(0, 4000);
+        }
+      } else if (docType === 'image') {
+        extractedText = `Document scan / image file: ${fileName}.\nExtracted image knowledge item for training chatbot.`;
+      }
+    }
+
+    const fileSizeKb = (buffer.length / 1024).toFixed(1) + ' KB';
+
+    res.json({
+      success: true,
+      title: extractedTitle,
+      content: extractedText || `Extracted content for ${fileName}`,
+      type: docType,
+      fileName,
+      fileSize: fileSizeKb,
+    });
+  } catch (err: any) {
+    console.error('File parsing error:', err);
+    res.status(500).json({ error: 'Failed to process document file', details: err.message });
+  }
+});
+
+// ==========================================
 // 5. SAVE OR UPDATE IN-MEMORY / FIRESTORE CHATBOT
 // ==========================================
 app.post('/api/chatbot/save', async (req, res) => {

@@ -18,7 +18,9 @@ export interface KBDocument {
   title: string;
   content: string;
   updatedAt: string;
-  type?: 'pdf' | 'doc' | 'text';
+  type?: 'pdf' | 'doc' | 'text' | 'image';
+  fileName?: string;
+  fileSize?: string;
 }
 
 export interface KBUrl {
