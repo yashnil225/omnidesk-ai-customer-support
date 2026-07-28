@@ -603,44 +603,158 @@ ${kbContextText}`;
 
     // Attempt AI API call if not handled by direct catalog guardrail
     if (!aiText) {
-      try {
-        const apiKey = process.env.OPENROUTER_API_KEY;
-        if (apiKey) {
-          const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.0-flash-001',
-              messages: [
-                { role: 'system', content: systemInstruction },
-                { role: 'user', content: `${chatHistoryPrompt}\nProvide the Support Bot's next reply to the Customer:` }
-              ]
-            })
-          });
+      const openRouterKey = process.env.OPENROUTER_API_KEY;
+      const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
-          if (openRouterRes.ok) {
-            const data = await openRouterRes.json();
-            if (data.choices && data.choices.length > 0) {
-              aiText = data.choices[0].message.content.trim();
+      // 1. Try OpenRouter API with fallbacks
+      if (openRouterKey) {
+        const modelsToTry = [
+          'google/gemini-2.0-flash-001',
+          'google/gemini-2.0-flash-exp:free',
+          'meta-llama/llama-3.3-70b-instruct',
+          'openai/gpt-4o-mini'
+        ];
+
+        for (const modelName of modelsToTry) {
+          if (aiText) break;
+          try {
+            const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${openRouterKey}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://omnidesk.ai',
+                'X-Title': 'OmniDesk AI Customer Support',
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages: [
+                  { role: 'system', content: systemInstruction },
+                  { role: 'user', content: `${chatHistoryPrompt}\nProvide the Support Bot's next reply to the Customer:` }
+                ],
+                temperature: 0.3,
+              })
+            });
+
+            if (openRouterRes.ok) {
+              const data = await openRouterRes.json();
+              if (data.choices && data.choices.length > 0 && data.choices[0].message?.content) {
+                aiText = data.choices[0].message.content.trim();
+              }
+            } else {
+              const errBody = await openRouterRes.text();
+              console.warn(`[OpenRouter Model ${modelName} Error ${openRouterRes.status}]:`, errBody.substring(0, 200));
             }
+          } catch (modelErr: any) {
+            console.warn(`[OpenRouter Call Error for ${modelName}]:`, modelErr.message);
           }
         }
-      } catch (apiErr) {
-        console.warn('AI service fallback triggered:', apiErr);
+      }
+
+      // 2. Try Direct Google Gemini API if OpenRouter didn't yield a result
+      if (!aiText && geminiKey) {
+        try {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemInstruction }] },
+                contents: [{ parts: [{ text: `${chatHistoryPrompt}\nProvide the Support Bot's next reply to the Customer:` }] }]
+              })
+            }
+          );
+
+          if (geminiRes.ok) {
+            const gData = await geminiRes.json();
+            const cand = gData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (cand) {
+              aiText = cand.trim();
+            }
+          } else {
+            console.warn(`[Gemini API Error ${geminiRes.status}]:`, await geminiRes.text());
+          }
+        } catch (gErr: any) {
+          console.warn('[Gemini Direct API Call Error]:', gErr.message);
+        }
       }
     }
 
-    // Fallback Knowledge Base matcher if AI API key/network is unavailable
+    // Smart Knowledge Base Product Search Engine (Fallback if AI APIs are offline)
     if (!aiText) {
-      if (userMessageLower.includes('ship') || userMessageLower.includes('deliver') || userMessageLower.includes('track')) {
-        aiText = "We offer standard shipping with delivery in 3-5 business days. Express shipping is also available at checkout.";
-      } else if (userMessageLower.includes('contact') || userMessageLower.includes('support') || userMessageLower.includes('help') || userMessageLower.includes('email')) {
-        aiText = "You can reach customer support through our contact page or email. How can I help you today?";
-      } else {
-        aiText = "Hello! I am your AI Support Assistant. I can help answer questions about our live products, order tracking, and store policies. What would you like to know?";
+      const lower = userMessageText.toLowerCase();
+
+      // Check for shipping/delivery questions
+      if (lower.includes('ship') || lower.includes('deliver') || lower.includes('track') || lower.includes('post')) {
+        const shippingFaq = bot.kbFaqs?.find((f: any) => JSON.stringify(f).toLowerCase().includes('ship'));
+        if (shippingFaq) {
+          aiText = shippingFaq.answer;
+        } else {
+          aiText = "We offer standard shipping with delivery in 3-5 business days. Express shipping is also available at checkout.";
+        }
+      } 
+      // Check for contact questions
+      else if (lower.includes('contact') || lower.includes('support') || lower.includes('email') || lower.includes('phone')) {
+        aiText = "You can reach customer support through our store contact page or email. How else can I assist you today?";
+      } 
+      // Product Catalog Queries & Keyword Search Engine
+      else {
+        // Extract products from kbDocs / Shopify catalog
+        const productTitles: string[] = [];
+        const productSnippets: string[] = [];
+
+        if (bot.kbDocs && bot.kbDocs.length > 0) {
+          bot.kbDocs.forEach((doc: any) => {
+            const content = doc.content || '';
+            // Parse product titles (### 1. Title or - Title)
+            const titleMatches = content.match(/###\s*\d*\.?\s*([^\n]+)/g);
+            if (titleMatches) {
+              titleMatches.forEach((m: string) => {
+                const clean = m.replace(/###\s*\d*\.?\s*/, '').trim();
+                if (clean && !productTitles.includes(clean)) {
+                  productTitles.push(clean);
+                }
+              });
+            }
+
+            // Search content lines for user query keywords
+            const queryWords = lower.replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3 && !['what', 'have', 'does', 'your', 'this', 'that', 'show', 'list', 'tell', 'about', 'need', 'want', 'like', 'avail'].includes(w));
+            if (queryWords.length > 0) {
+              const lines = content.split('\n');
+              lines.forEach(line => {
+                if (queryWords.some(w => line.toLowerCase().includes(w))) {
+                  const trimmedLine = line.trim();
+                  if (trimmedLine && !productSnippets.includes(trimmedLine)) {
+                    productSnippets.push(trimmedLine);
+                  }
+                }
+              });
+            }
+          });
+        }
+
+        // Also check kbFaqs for matching questions/answers
+        if (bot.kbFaqs && bot.kbFaqs.length > 0) {
+          const matchingFaq = bot.kbFaqs.find((f: any) => 
+            lower.split(/\s+/).some(w => w.length > 3 && (f.question.toLowerCase().includes(w) || f.answer.toLowerCase().includes(w)))
+          );
+          if (matchingFaq) {
+            aiText = matchingFaq.answer;
+          }
+        }
+
+        if (!aiText) {
+          if (productSnippets.length > 0) {
+            aiText = `Here is what I found in our live store catalog:\n${productSnippets.slice(0, 5).join('\n')}`;
+          } else if (productTitles.length > 0) {
+            aiText = `We currently offer the following active products in our store catalog:\n• ${productTitles.slice(0, 10).join('\n• ')}\n\nHow can I assist you with any of these items?`;
+          } else if (lower.includes('product') || lower.includes('catalog') || lower.includes('item') || lower.includes('buy') || lower.includes('sell')) {
+            aiText = "Our store catalog is currently being updated. Please check back shortly or sync your Shopify store URL in the Knowledge Base dashboard to train the bot on your live product catalog.";
+          } else {
+            aiText = "Hello! I am your AI Support Assistant. I can help answer questions about our store products, order tracking, and policies. What would you like to know?";
+          }
+        }
       }
     }
 
